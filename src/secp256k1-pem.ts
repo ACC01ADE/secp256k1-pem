@@ -64,14 +64,7 @@ export class Secp256k1PEM {
     let secpPEM = new Secp256k1PEM();
     secpPEM._isHdKey = true;
     secpPEM._hdKey = HDKey.fromMasterSeed(secp256k1.utils.hexToBytes(rawHEX(seed)));
-    const defaultKey: HDKey = secpPEM._hdKey!.derive(DEFAULT_HD_PATH + '0');
-    secpPEM._rawPEM = secp256k1.utils.concatBytes(
-      PEM_STATIC_1,
-      defaultKey.privateKey as Uint8Array,
-      PEM_STATIC_2,
-      secp256k1.Point.fromPrivateKey(defaultKey.privateKey as Uint8Array).toRawBytes(false)
-    );
-    defaultKey.wipePrivateData();
+    secpPEM.setDefaultPEM();
     return secpPEM;
   }
 
@@ -79,13 +72,19 @@ export class Secp256k1PEM {
     let secpPEM = new Secp256k1PEM();
     secpPEM._isHdKey = true;
     secpPEM._hdKey = HDKey.fromExtendedKey(base58key);
-    secpPEM._rawPEM = secp256k1.utils.concatBytes(
-      PEM_STATIC_1,
-      secpPEM._hdKey!.privateKey as Uint8Array,
-      PEM_STATIC_2,
-      secp256k1.Point.fromPrivateKey(secpPEM._hdKey!.privateKey as Uint8Array).toRawBytes(false)
-    );
+    secpPEM.setDefaultPEM();
     return secpPEM;
+  }
+
+  setDefaultPEM(): void {
+    const defaultKey: HDKey = this._hdKey!.derive(DEFAULT_HD_PATH + '0');
+    this._rawPEM = secp256k1.utils.concatBytes(
+      PEM_STATIC_1,
+      defaultKey.privateKey as Uint8Array,
+      PEM_STATIC_2,
+      secp256k1.Point.fromPrivateKey(defaultKey.privateKey as Uint8Array).toRawBytes(false)
+    );
+    defaultKey.wipePrivateData();
   }
 
   getRawPAM(): Uint8Array | undefined {
