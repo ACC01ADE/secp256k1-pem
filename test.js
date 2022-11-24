@@ -2,9 +2,7 @@ const { Secp256k1PEM } = require('./dist/src/index');
 
 // using samples from https://github.com/holographxyz/holograph-protocol/blob/testnet/sample.env
 
-console.log(
-  Secp256k1PEM.fromPrivateKey('0xff22437ccbedfffafa93a9f1da2e8c19c1711052799acf3b58ae5bebb5c6bd7b').getPAM()
-);
+console.log(Secp256k1PEM.fromPrivateKey('0xff22437ccbedfffafa93a9f1da2e8c19c1711052799acf3b58ae5bebb5c6bd7b').getPAM());
 
 console.log(
   Secp256k1PEM.fromMnemonic(
