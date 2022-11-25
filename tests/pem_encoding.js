@@ -1,4 +1,4 @@
-const { Secp256k1PEM } = require('./dist/src/index');
+const { Secp256k1PEM } = require('../dist/src/index');
 
 // using samples from https://github.com/holographxyz/holograph-protocol/blob/testnet/sample.env
 

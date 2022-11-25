@@ -1,6 +1,6 @@
 {
   "name": "secp256k1-pem",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Secp256k1 to PEM format",
   "license": "MIT",
   "author": "ACC01ADE",
@@ -27,6 +27,7 @@
     "prettier:fix": "prettier --loglevel error --ignore-path .gitignore --write ."
   },
   "dependencies": {
+    "@noble/hashes": "^1.1.3",
     "@noble/secp256k1": "^1.7.0",
     "@scure/bip32": "^1.1.1",
     "@scure/bip39": "^1.1.0"

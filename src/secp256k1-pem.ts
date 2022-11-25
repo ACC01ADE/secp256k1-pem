@@ -3,37 +3,78 @@ import * as bip39 from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 import { HDKey } from '@scure/bip32';
 
-const rawHEX = (input: string): string => {
-  input = input.trim();
-  if (input.toLowerCase().startsWith('0x')) {
-    input = input.substring(2);
-  }
-  if (input.length % 2 !== 0) {
-    input = '0' + input;
-  }
-  return input;
-};
+import { rawHEX, uint8ArrayToHex, uint8ArrayToBase64 } from './utils';
 
-const uint8ArrayToHex = (bytes: Uint8Array): string => {
-  let output: string = '';
-  for (let i: number = 0; i < bytes.length; i++) {
-    if (bytes[i] < 16) {
-      output += '0';
-    }
-    output += bytes[i].toString(16);
-  }
-  return output;
-};
+/*
+  @dev Read this for more info -> http://websites.umich.edu/~x509/ssleay/layman.html
 
-const uint8ArrayToBase64 = (bytes: Uint8Array): string => {
-  return btoa(String.fromCharCode.apply(null, [].slice.call(bytes)));
-};
+  // HEADER
 
-const PEM_STATIC_1: Uint8Array = secp256k1.utils.hexToBytes(rawHEX('0x30740201010420'));
-const PEM_STATIC_2: Uint8Array = secp256k1.utils.hexToBytes(rawHEX('0xa00706052b8104000aa144034200'));
-const PEM_HEADER: string = '-----BEGIN EC PRIVATE KEY-----\n';
-const PEM_FOOTER: string = '\n-----END EC PRIVATE KEY-----';
-const PEM_FORMAT_REGEX: RegExp = /([-a-z0-9+\/=]{64})/gi;
+  0x30 - ASN.1
+  0x74 - Length of all following bytes (116 bytes)
+
+
+  // PRIVATE KEY PARAMS
+
+  0x02 - Type (integer)
+  0x01 - Length of integer (1 byte)
+  0x01 - Value of integer (1)
+
+  0x04 - Type (octet string)
+  0x20 - Length of string (32 bytes)
+
+    // PRIVATE KEY
+
+    - 32 byte private key goes here
+    0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+    0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+    0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+    0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+
+
+  // CURVE PARAMS
+
+  0xA0 - Tag 0
+  0x07 - Length of tag (7 bytes)
+  0x06 - Type (Object ID)
+  0x05 - Length of the Object ID (5 bytes)
+
+    // CURVE
+
+    - The object ID of the curve secp256k1
+    0x2B 0x81 0x04 0x00 0x0A
+
+
+  // PUBLIC KEY PARAMS
+
+  0xA1 - Tag 1
+  0x44 - Length of tag (68 bytes)
+  0x03 - Type – Bit string
+  0x42 - Length of the bit string (66 bytes)
+  0x00 - Length of unused padding bits in the bit string
+  0x04 - Uncompressed Public Key
+
+    // PUBLIC KEY
+
+    - 64 byte public key goes here
+    0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+    0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+    0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+    0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+    0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+    0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+    0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+    0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+
+*/
+const ASN_HEADER: Uint8Array = secp256k1.utils.hexToBytes(rawHEX('0x30740201010420'));
+const CURVE_HEADER: Uint8Array = secp256k1.utils.hexToBytes(rawHEX('0xA00706052B8104000AA14403420004'));
+
+const PEM_KEY_HEADER: string = '-----BEGIN EC PRIVATE KEY-----\n';
+const PEM_KEY_FOOTER: string = '\n-----END EC PRIVATE KEY-----';
+
+// limit line width to 64 characters with this regex
+const PEM_LINE_WIDTH_REGEX: RegExp = /([-a-z0-9+\/=]{64})/gi;
 
 const DEFAULT_HD_PATH: string = "m/44'/60'/0'/0/";
 
@@ -45,8 +86,10 @@ export class Secp256k1PEM {
   static fromPrivateKey(privateKeyHex: string): Secp256k1PEM {
     let secpPEM = new Secp256k1PEM();
     let _privateKey: Uint8Array | undefined = secp256k1.utils.hexToBytes(rawHEX(privateKeyHex));
-    let _publicKey: Uint8Array = secp256k1.Point.fromPrivateKey(_privateKey as Uint8Array).toRawBytes(false);
-    secpPEM._rawPEM = secp256k1.utils.concatBytes(PEM_STATIC_1, _privateKey as Uint8Array, PEM_STATIC_2, _publicKey);
+    let _publicKey: Uint8Array = secp256k1.Point.fromPrivateKey(_privateKey as Uint8Array)
+      .toRawBytes(false)
+      .slice(1);
+    secpPEM._rawPEM = secp256k1.utils.concatBytes(ASN_HEADER, _privateKey as Uint8Array, CURVE_HEADER, _publicKey);
     _privateKey.fill(0);
     _privateKey = undefined;
     return secpPEM;
@@ -79,10 +122,12 @@ export class Secp256k1PEM {
   setDefaultPEM(): void {
     const defaultKey: HDKey = this._hdKey!.derive(DEFAULT_HD_PATH + '0');
     this._rawPEM = secp256k1.utils.concatBytes(
-      PEM_STATIC_1,
+      ASN_HEADER,
       defaultKey.privateKey as Uint8Array,
-      PEM_STATIC_2,
-      secp256k1.Point.fromPrivateKey(defaultKey.privateKey as Uint8Array).toRawBytes(false)
+      CURVE_HEADER,
+      secp256k1.Point.fromPrivateKey(defaultKey.privateKey as Uint8Array)
+        .toRawBytes(false)
+        .slice(1)
     );
     defaultKey.wipePrivateData();
   }
@@ -101,10 +146,12 @@ export class Secp256k1PEM {
         // we need a new rawPEM
         const defaultKey: HDKey = this._hdKey!.derive(path as string);
         PEM = secp256k1.utils.concatBytes(
-          PEM_STATIC_1,
+          ASN_HEADER,
           defaultKey.privateKey as Uint8Array,
-          PEM_STATIC_2,
-          secp256k1.Point.fromPrivateKey(defaultKey.privateKey as Uint8Array).toRawBytes(false)
+          CURVE_HEADER,
+          secp256k1.Point.fromPrivateKey(defaultKey.privateKey as Uint8Array)
+            .toRawBytes(false)
+            .slice(1)
         );
         defaultKey.wipePrivateData();
       } else {
@@ -113,6 +160,6 @@ export class Secp256k1PEM {
     }
     const hex: string = uint8ArrayToHex(PEM);
     const b64: string = uint8ArrayToBase64(secp256k1.utils.hexToBytes(hex));
-    return PEM_HEADER + b64.replace(PEM_FORMAT_REGEX, '$1\n') + PEM_FOOTER;
+    return PEM_KEY_HEADER + b64.replace(PEM_LINE_WIDTH_REGEX, '$1\n') + PEM_KEY_FOOTER;
   }
 }
